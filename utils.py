@@ -142,10 +142,25 @@ def generate_text(model, tokenizer, prompt: str, max_length: int = 100,
     # Convert to tensor
     input_ids = torch.tensor([input_ids], dtype=torch.long, device=device)
     
+    # Ensure initial input doesn't exceed model's sequence length
+    model_seq_length = getattr(model, 'sequence_length', 64)  # Default to 64 if not found
+    if input_ids.size(1) > model_seq_length:
+        input_ids = input_ids[:, -model_seq_length:]
+        # Update prompt to match trimmed input
+        if hasattr(tokenizer, 'decode'):
+            prompt = tokenizer.decode(input_ids[0].tolist())
+        else:
+            prompt = ''.join([tokenizer.idx_to_char.get(idx, '?') for idx in input_ids[0].tolist()])
+    
     generated_text = prompt
     
     with torch.no_grad():
         for _ in range(max_length):
+            # Ensure input doesn't exceed model's sequence length
+            model_seq_length = getattr(model, 'sequence_length', 512)
+            if input_ids.size(1) > model_seq_length:
+                input_ids = input_ids[:, -model_seq_length:]
+            
             # Get model predictions
             logits = model(input_ids)
             
@@ -170,11 +185,6 @@ def generate_text(model, tokenizer, prompt: str, max_length: int = 100,
             # Update input for next prediction
             next_token_tensor = torch.tensor([[next_token_id]], device=device)
             input_ids = torch.cat([input_ids, next_token_tensor], dim=1)
-            
-            # Keep only the recent context (to prevent memory issues)
-            max_context = 512  # Adjust based on your model's sequence length
-            if input_ids.size(1) > max_context:
-                input_ids = input_ids[:, -max_context:]
     
     return generated_text
 

@@ -10,20 +10,20 @@ class ModelConfig:
         # Data settings
         self.data_url = "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt"
         self.data_file = "data/shakespeare.txt"
-        self.sequence_length = 128  # Length of input sequences
-        self.batch_size = 64        # Batch size for training
+        self.sequence_length = 64   # Length of input sequences (reduced for CPU)
+        self.batch_size = 32        # Batch size for training (reduced for CPU)
         
         # Model architecture
         self.vocab_size = None      # Will be set based on data
-        self.embedding_dim = 256    # Embedding dimension
-        self.hidden_dim = 512       # Hidden dimension for MLP/Transformer
-        self.num_layers = 4         # Number of layers
-        self.num_heads = 8          # Number of attention heads (for Transformer)
+        self.embedding_dim = 128    # Embedding dimension (reasonable for CPU)
+        self.hidden_dim = 256       # Hidden dimension for MLP/Transformer
+        self.num_layers = 3         # Number of layers (reasonable for CPU)
+        self.num_heads = 4          # Number of attention heads (for Transformer)
         self.dropout = 0.1          # Dropout rate
         
         # Training settings
-        self.learning_rate = 3e-4   # Learning rate
-        self.num_epochs = 50        # Number of training epochs
+        self.learning_rate = 1e-3   # Learning rate (slightly higher for faster convergence)
+        self.num_epochs = 20        # Number of training epochs (reasonable for CPU)
         self.weight_decay = 1e-5    # Weight decay for regularization
         self.gradient_clip = 1.0    # Gradient clipping value
         

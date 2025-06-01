@@ -30,35 +30,76 @@ def load_trained_model(model_path: str, data_file: str, device):
     """
     # Load dataset to get vocabulary
     dataset = TextDataset(data_file, config.sequence_length)
-    
-    # Load checkpoint
+      # Load checkpoint
     checkpoint = torch.load(model_path, map_location=device)
     model_config = checkpoint.get('model_config', {})
+    state_dict = checkpoint['model_state_dict']
     
     # Get model parameters from checkpoint or use defaults
     vocab_size = model_config.get('vocab_size', dataset.vocab_size)
     embedding_dim = model_config.get('embedding_dim', config.embedding_dim)
     sequence_length = model_config.get('sequence_length', config.sequence_length)
     
-    # Determine model type based on checkpoint (simple heuristic)
-    # In a real implementation, you'd save this information
-    state_dict = checkpoint['model_state_dict']
-    
-    # Check if it's a transformer (has attention layers)
+    # Determine model type and architecture from state_dict
     is_transformer = any('attention' in key for key in state_dict.keys())
     model_type = "transformer" if is_transformer else "mlp"
     
-    print(f"Detected model type: {model_type}")
+    # Infer model dimensions from the state_dict
+    if is_transformer:
+        # Get embedding dimension from embedding layer
+        if 'embedding.weight' in state_dict:
+            vocab_size_from_model, embedding_dim = state_dict['embedding.weight'].shape
+            vocab_size = vocab_size_from_model
+        
+        # Get number of transformer blocks
+        transformer_layer_keys = [k for k in state_dict.keys() if k.startswith('transformer_blocks.')]
+        if transformer_layer_keys:
+            layer_numbers = [int(k.split('.')[1]) for k in transformer_layer_keys]
+            num_layers = max(layer_numbers) + 1
+        else:
+            num_layers = config.num_layers
+        
+        # Get hidden dimension from first FFN layer
+        ffn_key = 'transformer_blocks.0.ffn.0.weight'
+        if ffn_key in state_dict:
+            hidden_dim, _ = state_dict[ffn_key].shape
+        else:
+            hidden_dim = config.hidden_dim
+        
+        # Get number of heads (assume default if not found)
+        num_heads = config.num_heads
+        
+    else:  # MLP model
+        # Get dimensions from MLP layers
+        if 'embedding.weight' in state_dict:
+            vocab_size_from_model, embedding_dim = state_dict['embedding.weight'].shape
+            vocab_size = vocab_size_from_model
+        
+        # Count MLP layers
+        mlp_keys = [k for k in state_dict.keys() if k.startswith('mlp.') and 'weight' in k]
+        num_layers = len([k for k in mlp_keys if '.weight' in k and 'Linear' in str(type(k))]) - 1  # Subtract output layer
+        
+        # Get hidden dimension
+        first_linear_key = next((k for k in mlp_keys if '.weight' in k), None)
+        if first_linear_key and len(state_dict[first_linear_key].shape) == 2:
+            hidden_dim = state_dict[first_linear_key].shape[0]
+        else:
+            hidden_dim = config.hidden_dim
+        
+        num_heads = config.num_heads  # Not used for MLP
     
-    # Create model
+    print(f"Detected model type: {model_type}")
+    print(f"Inferred architecture: embedding_dim={embedding_dim}, hidden_dim={hidden_dim}, num_layers={num_layers}")
+    
+    # Create model with inferred parameters
     model = create_model(
         model_type=model_type,
         vocab_size=vocab_size,
         embedding_dim=embedding_dim,
-        hidden_dim=config.hidden_dim,
-        num_layers=config.num_layers,
+        hidden_dim=hidden_dim,
+        num_layers=num_layers,
         sequence_length=sequence_length,
-        num_heads=config.num_heads,
+        num_heads=num_heads,
         dropout=0.0  # No dropout during inference
     )
     
